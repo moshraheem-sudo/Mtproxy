@@ -1,0 +1,6 @@
+{
+  "name": "تلي بروكسي",
+  "description": "تطبيق احترافي لربط تلغرام عبر بروكسيات MTProto محدثة تلقائياً من SoliSpirit/mtproto مع مشاركة وباركود QR وضمان استقرار الخدمة - تطوير محمد شهيد الاعاجيبي",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
