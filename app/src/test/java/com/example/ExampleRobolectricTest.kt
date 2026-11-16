@@ -2,10 +2,18 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.example.data.local.AppLanguage
+import com.example.data.local.SyncStateCode
 import com.example.data.network.AppUpdateAndStatsFetcher
 import com.example.data.network.MtprotoFetcher
+import com.example.security.SecurityGuard
+import com.example.ui.i18n.stringsFor
+import androidx.compose.ui.unit.dp
+import com.example.ui.theme.ScreenWidthClass
+import com.example.ui.theme.computeAdaptiveUiSpecs
 import com.example.util.QrCodeGenerator
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,6 +30,66 @@ class ExampleRobolectricTest {
         assertEquals("تلي بروكسي", context.getString(R.string.app_name))
         assertEquals("محمد شهيد الاعاجيبي", context.getString(R.string.developer_name))
         assertEquals("1.0.0", BuildConfig.VERSION_NAME)
+    }
+
+    @Test
+    fun `multi language strings and sync state formatting work without cross language leaks`() {
+        assertTrue(AppLanguage.ARABIC.isRtl)
+        assertFalse(AppLanguage.ENGLISH.isRtl)
+        assertTrue(AppLanguage.KURDISH.isRtl)
+        assertTrue(AppLanguage.PERSIAN.isRtl)
+
+        val en = stringsFor(AppLanguage.ENGLISH)
+        val arabicCharRegex = Regex("[\u0600-\u06FF]")
+        assertFalse(arabicCharRegex.containsMatchIn(en.officialTelegramName))
+        assertFalse(arabicCharRegex.containsMatchIn(en.formatSyncState(SyncStateCode.WORKING, 90, 288, "")))
+        assertFalse(arabicCharRegex.containsMatchIn(en.formatSyncState(SyncStateCode.IDLE, 0, 0, "")))
+        assertFalse(arabicCharRegex.containsMatchIn(en.securityShieldDetails))
+
+        assertEquals("قائمة الاتصال", stringsFor(AppLanguage.ARABIC).navConnections)
+        assertEquals("Connections", en.navConnections)
+        assertEquals("لیستی پەیوەندی", stringsFor(AppLanguage.KURDISH).navConnections)
+        assertEquals("فهرست اتصال", stringsFor(AppLanguage.PERSIAN).navConnections)
+
+        // Ensure Home sync footer line has no repeated auto-sync phrases
+        AppLanguage.entries.forEach { lang ->
+            val s = stringsFor(lang)
+            val timestampLine = s.lastUpdateCloudText("12:00")
+            assertFalse(timestampLine.contains(s.autoSyncOnBadge.replace(" ✓", "")))
+        }
+    }
+
+    @Test
+    fun `adaptive ui specs adjust spacing typography scale and navigation mode for all screen sizes`() {
+        val tinyPhone = computeAdaptiveUiSpecs(maxWidth = 320.dp, systemFontScale = 1.0f)
+        assertEquals(ScreenWidthClass.ULTRA_COMPACT, tinyPhone.widthClass)
+        assertTrue(tinyPhone.useStackedHeaders)
+        assertFalse(tinyPhone.useNavigationRail)
+        assertTrue(tinyPhone.fontScaleMultiplier < 1.0f)
+
+        val standardPhone = computeAdaptiveUiSpecs(maxWidth = 390.dp, systemFontScale = 1.0f)
+        assertEquals(ScreenWidthClass.COMPACT, standardPhone.widthClass)
+        assertFalse(standardPhone.useStackedHeaders)
+        assertFalse(standardPhone.useNavigationRail)
+        assertEquals(1.0f, standardPhone.fontScaleMultiplier)
+
+        val tablet = computeAdaptiveUiSpecs(maxWidth = 720.dp, systemFontScale = 1.0f)
+        assertEquals(ScreenWidthClass.EXPANDED, tablet.widthClass)
+        assertTrue(tablet.useNavigationRail)
+        assertFalse(tablet.useStackedHeaders)
+    }
+
+    @Test
+    fun `security guard blocks untrusted urls and malformed mtproto inputs`() {
+        assertTrue(SecurityGuard.isTrustedHttpsUrl("https://github.com/moshraheem-sudo/Mtproxy"))
+        assertTrue(SecurityGuard.isTrustedHttpsUrl("https://raw.githubusercontent.com/SoliSpirit/mtproto/master/all_proxies.txt"))
+        assertFalse(SecurityGuard.isTrustedHttpsUrl("http://github.com/moshraheem-sudo/Mtproxy"))
+        assertFalse(SecurityGuard.isTrustedHttpsUrl("https://evil-attacker.example/update.apk"))
+
+        assertTrue(SecurityGuard.sanitizeProxyFields("ir.ataman.info", 8443, "ee11223344556677889900aabbccddeeff776655"))
+        assertFalse(SecurityGuard.sanitizeProxyFields("bad host/path", 8443, "ee11223344556677889900aabbccddeeff776655"))
+        assertFalse(SecurityGuard.sanitizeProxyFields("ir.ataman.info", 99999, "ee11223344556677889900aabbccddeeff776655"))
+        assertFalse(SecurityGuard.sanitizeProxyFields("ir.ataman.info", 443, "short"))
     }
 
     @Test

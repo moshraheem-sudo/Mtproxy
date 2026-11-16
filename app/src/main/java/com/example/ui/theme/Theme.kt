@@ -75,10 +75,11 @@ fun TeleProxyTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val adaptiveSpecs = LocalAdaptiveSpecs.current
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = AppTypography,
+        typography = AppTypography.scaled(adaptiveSpecs.fontScaleMultiplier),
         shapes = AppShapes,
         content = content
     )

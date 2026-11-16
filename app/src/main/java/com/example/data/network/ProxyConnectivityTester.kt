@@ -52,8 +52,8 @@ class ProxyConnectivityTester {
 
     suspend fun testBatch(
         proxies: List<ProxyEntity>,
-        maxConcurrency: Int = 12,
-        timeoutMs: Int = 3200,
+        maxConcurrency: Int = 24,
+        timeoutMs: Int = 2800,
         onProgress: (checkedCount: Int, total: Int) -> Unit = { _, _ -> }
     ): List<PingMeasurement> = coroutineScope {
         if (proxies.isEmpty()) return@coroutineScope emptyList()

@@ -1,9 +1,12 @@
 package com.example.data.repository
 
 import com.example.BuildConfig
+import com.example.data.local.AppLanguage
 import com.example.data.local.ProxyDao
 import com.example.data.local.ProxySettings
 import com.example.data.local.SettingsDataStore
+import com.example.data.local.SyncStateCode
+import com.example.data.local.ThemeMode
 import com.example.data.model.ProxyEntity
 import com.example.data.network.AppRemoteStatus
 import com.example.data.network.AppUpdateAndStatsFetcher
@@ -15,6 +18,7 @@ data class SyncSummary(
     val fetchedCount: Int,
     val testedCount: Int,
     val workingCount: Int,
+    val prunedDeadCount: Int,
     val activeProxy: ProxyEntity?,
     val switchedAutomatically: Boolean,
     val errorMessage: String? = null
@@ -31,23 +35,30 @@ class ProxyRepository(
     val settingsFlow: Flow<ProxySettings> = settingsStore.settingsFlow
 
     suspend fun syncAndVerify(
-        maxTestCount: Int = 80,
+        maxTestCount: Int = 350,
         onProgress: (checked: Int, total: Int) -> Unit = { _, _ -> }
     ): SyncSummary {
         val fetchResult = fetcher.fetchFromSoliSpirit()
         if (fetchResult.isFailure) {
-            val message = fetchResult.exceptionOrNull()?.localizedMessage ?: "تعذر الاتصال بمصدر التحديث"
+            val message = fetchResult.exceptionOrNull()?.localizedMessage.orEmpty()
             val now = System.currentTimeMillis()
             val cached = proxyDao.getAllProxiesOnce()
-            settingsStore.updateSyncMetadata(now, "فشل التحديث: $message", cached.size)
+            settingsStore.updateSyncMetadata(
+                timestamp = now,
+                stateCode = SyncStateCode.ERROR,
+                workingCount = cached.count { it.isReachable },
+                totalCount = cached.size,
+                errorDetail = message
+            )
             val active = resolveOrFailoverActiveProxy()
             return SyncSummary(
                 fetchedCount = 0,
                 testedCount = 0,
                 workingCount = cached.count { it.isReachable },
+                prunedDeadCount = 0,
                 activeProxy = active,
                 switchedAutomatically = false,
-                errorMessage = message
+                errorMessage = message.ifBlank { "Network error" }
             )
         }
 
@@ -68,60 +79,64 @@ class ProxyRepository(
             )
         }
 
+        // Automatically remove every unreachable/broken port & secret on every update
         val workingCount = results.count { it.isReachable }
+        val prunedCount = proxyDao.deleteUnreachableProxies()
+
         val settings = settingsStore.getSnapshot()
         val previousActiveId = settings.activeProxyId
         val activeProxy = resolveOrFailoverActiveProxy()
         val switched = activeProxy != null && activeProxy.id != previousActiveId
 
-        val statusMsg = if (workingCount > 0) {
-            "تم التحديث بنجاح • $workingCount بروكسي شغال"
-        } else {
-            "تم جلب ${freshProxies.size} بروكسي (تحقق من اتصال الإنترنت)"
-        }
-        settingsStore.updateSyncMetadata(now, statusMsg, freshProxies.size)
+        val stateCode = if (workingCount > 0) SyncStateCode.WORKING else SyncStateCode.NONE_WORKING
+        settingsStore.updateSyncMetadata(
+            timestamp = now,
+            stateCode = stateCode,
+            workingCount = workingCount,
+            totalCount = freshProxies.size
+        )
 
-        // Refresh app update & total user count quietly in background
-        refreshAppUpdateAndUserStats()
+        checkForAppUpdate()
 
         return SyncSummary(
             fetchedCount = freshProxies.size,
             testedCount = results.size,
             workingCount = workingCount,
+            prunedDeadCount = prunedCount,
             activeProxy = activeProxy,
             switchedAutomatically = switched
         )
     }
 
-    suspend fun refreshAppUpdateAndUserStats(): AppRemoteStatus {
-        val status = appRemoteFetcher.fetchUpdateAndUserStats(BuildConfig.VERSION_NAME)
+    suspend fun checkForAppUpdate(): AppRemoteStatus {
+        val status = appRemoteFetcher.fetchAppUpdate(currentVersion = BuildConfig.VERSION_NAME)
+
         if (status.checkSucceeded) {
-            val prev = settingsStore.getSnapshot()
-            val resolvedUsers = if (status.totalUsersCount > 0) status.totalUsersCount else prev.totalUsersCount
             settingsStore.updateAppRemoteInfo(
-                totalUsersCount = resolvedUsers,
                 latestVersion = if (status.isUpdateAvailable) status.latestVersion else null,
                 updateUrl = if (status.isUpdateAvailable) status.downloadUrl else null,
+                apkAssetUrl = if (status.isUpdateAvailable) status.apkAssetUrl else null,
                 releaseNotes = if (status.isUpdateAvailable) status.releaseNotes else null,
                 checkedAt = System.currentTimeMillis()
             )
-            return status.copy(totalUsersCount = resolvedUsers)
         }
         return status
     }
 
     suspend fun pingAllExisting(
-        maxTestCount: Int = 100,
+        maxTestCount: Int = 350,
         onProgress: (checked: Int, total: Int) -> Unit = { _, _ -> }
-    ): Int {
+    ): Pair<Int, Int> {
         val all = proxyDao.getAllProxiesOnce().take(maxTestCount)
         val results = tester.testBatch(all, onProgress = onProgress)
         val now = System.currentTimeMillis()
         results.forEach { m ->
             proxyDao.updateLatency(m.proxyId, m.latencyMs, m.isReachable, now)
         }
+        // Automatically prune non-working ports/secrets
+        val pruned = proxyDao.deleteUnreachableProxies()
         resolveOrFailoverActiveProxy()
-        return results.count { it.isReachable }
+        return results.count { it.isReachable } to pruned
     }
 
     suspend fun verifyActiveOrAutoSwitch(): Pair<ProxyEntity?, Boolean> {
@@ -130,7 +145,7 @@ class ProxyRepository(
         val current = currentId?.let { proxyDao.getProxyById(it) }
 
         if (current != null) {
-            val check = tester.testSingleProxy(current, timeoutMs = 3500)
+            val check = tester.testSingleProxy(current, timeoutMs = 3200)
             proxyDao.updateLatency(
                 id = current.id,
                 latencyMs = check.latencyMs,
@@ -139,6 +154,9 @@ class ProxyRepository(
             )
             if (check.isReachable) {
                 return proxyDao.getProxyById(current.id) to false
+            } else {
+                // Remove dead proxy automatically
+                proxyDao.deleteUnreachableProxies()
             }
         }
 
@@ -149,7 +167,7 @@ class ProxyRepository(
                 return fastest to (fastest.id != currentId)
             }
         }
-        return current to false
+        return null to false
     }
 
     private suspend fun resolveOrFailoverActiveProxy(): ProxyEntity? {
@@ -169,9 +187,9 @@ class ProxyRepository(
     }
 
     private suspend fun findBestVerifiedProxy(): ProxyEntity? {
-        val candidates = proxyDao.getAllProxiesOnce().take(20)
+        val candidates = proxyDao.getAllProxiesOnce().take(25)
         for (candidate in candidates) {
-            val check = tester.testSingleProxy(candidate, timeoutMs = 2800)
+            val check = tester.testSingleProxy(candidate, timeoutMs = 2600)
             proxyDao.updateLatency(
                 id = candidate.id,
                 latencyMs = check.latencyMs,
@@ -182,6 +200,7 @@ class ProxyRepository(
                 return proxyDao.getProxyById(candidate.id)
             }
         }
+        proxyDao.deleteUnreachableProxies()
         return null
     }
 
@@ -197,5 +216,7 @@ class ProxyRepository(
     suspend fun setSyncIntervalMinutes(minutes: Long) = settingsStore.setSyncIntervalMinutes(minutes)
     suspend fun setAutoFailoverEnabled(enabled: Boolean) = settingsStore.setAutoFailoverEnabled(enabled)
     suspend fun setStabilityServiceEnabled(enabled: Boolean) = settingsStore.setStabilityServiceEnabled(enabled)
+    suspend fun setThemeMode(mode: ThemeMode) = settingsStore.setThemeMode(mode)
+    suspend fun setAppLanguage(language: AppLanguage) = settingsStore.setAppLanguage(language)
     suspend fun getSettingsSnapshot(): ProxySettings = settingsStore.getSnapshot()
 }

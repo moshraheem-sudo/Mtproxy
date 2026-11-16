@@ -2,6 +2,7 @@ package com.example.data.network
 
 import android.net.Uri
 import com.example.data.model.ProxyEntity
+import com.example.security.SecurityGuard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -31,6 +32,7 @@ class MtprotoFetcher {
     suspend fun fetchFromSoliSpirit(): Result<FetchResult> = withContext(Dispatchers.IO) {
         var lastError: Throwable? = null
         for (url in endpoints) {
+            if (!SecurityGuard.isTrustedHttpsUrl(url)) continue
             try {
                 val request = Request.Builder()
                     .url(url)
@@ -123,9 +125,7 @@ class MtprotoFetcher {
     }
 
     private fun isValidProxyFields(server: String, port: Int?, secret: String): Boolean {
-        if (server.isBlank() || server.length > 253 || server.contains(" ")) return false
-        if (port == null || port !in 1..65535) return false
-        if (secret.length < 16) return false
-        return true
+        if (port == null) return false
+        return SecurityGuard.sanitizeProxyFields(server, port, secret)
     }
 }

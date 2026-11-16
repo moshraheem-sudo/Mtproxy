@@ -12,7 +12,7 @@ class ProxySyncWorker(
 
     override suspend fun doWork(): Result {
         val app = applicationContext as? TeleProxyApp ?: return Result.failure()
-        val summary = app.repository.syncAndVerify(maxTestCount = 60)
+        val summary = app.repository.syncAndVerify(maxTestCount = 350)
         return if (summary.errorMessage == null || summary.workingCount > 0) {
             Result.success()
         } else {

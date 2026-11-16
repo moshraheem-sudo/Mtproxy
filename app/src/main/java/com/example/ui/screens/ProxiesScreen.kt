@@ -5,9 +5,12 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,12 +22,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Star
@@ -38,30 +40,30 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.ProxyEntity
+import com.example.ui.i18n.LocalStrings
 import com.example.ui.theme.AmberModerate
 import com.example.ui.theme.CoralError
 import com.example.ui.theme.EmeraldVerified
 import com.example.ui.theme.JetBrainsMonoFamily
+import com.example.ui.theme.LocalAdaptiveSpecs
 import com.example.viewmodel.MainUiState
 import com.example.viewmodel.ProxyFilter
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProxiesScreen(
     state: MainUiState,
-    onSearchChange: (String) -> Unit,
     onFilterChange: (ProxyFilter) -> Unit,
     onSyncNow: () -> Unit,
     onPingAll: () -> Unit,
@@ -72,80 +74,89 @@ fun ProxiesScreen(
     onShareProxy: (ProxyEntity) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val strings = LocalStrings.current
+    val specs = LocalAdaptiveSpecs.current
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = specs.horizontalPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .widthIn(max = 700.dp)
+                .widthIn(max = specs.contentMaxWidth)
         ) {
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(specs.verticalPadding))
 
-            // Header + Action Buttons
-            Row(
+            // Responsive Header + Action Buttons (wraps gracefully on small phones so counts never truncate)
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column {
+                Column(
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     Text(
-                        text = "قائمة البروكسيات",
+                        text = strings.connectionsHeader,
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "${state.filteredProxies.size} بروكسي متاح",
+                        text = strings.availableCountText(state.filteredProxies.size),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     OutlinedButton(
                         onClick = onPingAll,
                         enabled = !state.isPingingAll && !state.isSyncing && state.proxies.isNotEmpty(),
-                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                         modifier = Modifier
-                            .height(48.dp)
+                            .defaultMinSize(minHeight = 48.dp)
                             .testTag("ping_all_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Speed,
-                            contentDescription = "فحص السرعة للكل",
-                            modifier = Modifier.size(18.dp)
+                            contentDescription = strings.checkAllBtn,
+                            modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("فحص الكل", style = MaterialTheme.typography.labelMedium)
+                        Text(strings.checkAllBtn, style = MaterialTheme.typography.labelMedium, maxLines = 1)
                     }
 
                     Button(
                         onClick = onSyncNow,
                         enabled = !state.isSyncing,
-                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                         modifier = Modifier
-                            .height(48.dp)
+                            .defaultMinSize(minHeight = 48.dp)
                             .testTag("proxies_sync_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
-                            contentDescription = "تحديث القائمة",
-                            modifier = Modifier.size(18.dp)
+                            contentDescription = strings.refreshBtn,
+                            modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("تحديث", style = MaterialTheme.typography.labelMedium)
+                        Text(strings.refreshBtn, style = MaterialTheme.typography.labelMedium, maxLines = 1)
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             AnimatedVisibility(visible = state.isSyncing || state.isPingingAll) {
                 Column(
-                    modifier = Modifier.padding(bottom = 10.dp),
+                    modifier = Modifier.padding(bottom = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -159,55 +170,57 @@ fun ProxiesScreen(
                 }
             }
 
-            // Search Field
-            OutlinedTextField(
-                value = state.searchQuery,
-                onValueChange = onSearchChange,
-                placeholder = { Text("ابحث بالعنوان أو المنفذ...") },
-                leadingIcon = {
-                    Icon(imageVector = Icons.Default.Search, contentDescription = null)
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("proxy_search_input")
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
             // Filter Chips
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 FilterChip(
                     selected = state.activeFilter == ProxyFilter.ALL,
                     onClick = { onFilterChange(ProxyFilter.ALL) },
-                    label = { Text("الكل (${state.proxies.size})") },
+                    label = {
+                        Text(
+                            strings.filterAll(state.proxies.size),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1
+                        )
+                    },
                     modifier = Modifier.testTag("filter_all_chip")
                 )
                 FilterChip(
                     selected = state.activeFilter == ProxyFilter.REACHABLE_ONLY,
                     onClick = { onFilterChange(ProxyFilter.REACHABLE_ONLY) },
-                    label = { Text("الشغالة (${state.proxies.count { it.isReachable }})") },
+                    label = {
+                        Text(
+                            strings.filterWorking(state.proxies.count { it.isReachable }),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1
+                        )
+                    },
                     modifier = Modifier.testTag("filter_working_chip")
                 )
                 FilterChip(
                     selected = state.activeFilter == ProxyFilter.FAVORITES,
                     onClick = { onFilterChange(ProxyFilter.FAVORITES) },
-                    label = { Text("المفضلة") },
+                    label = {
+                        Text(
+                            strings.filterFavorites,
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1
+                        )
+                    },
                     modifier = Modifier.testTag("filter_favorites_chip")
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             if (state.filteredProxies.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(24.dp),
+                        .padding(20.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -218,24 +231,24 @@ fun ProxiesScreen(
                             imageVector = Icons.Default.CloudOff,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(56.dp)
+                            modifier = Modifier.size(52.dp)
                         )
                         Text(
                             text = if (state.proxies.isEmpty()) {
-                                "لا توجد بروكسيات محفوظة بعد.\nاضغط تحديث لجلب أحدث القائمة من الخادم السحابي."
+                                strings.emptyConnectionsList
                             } else {
-                                "لا توجد نتائج مطابقة للبحث أو الفلتر الحالي."
+                                strings.emptyFilteredConnections
                             },
-                            style = MaterialTheme.typography.bodyLarge,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
                         )
                         if (state.proxies.isEmpty()) {
                             Button(
                                 onClick = onSyncNow,
-                                modifier = Modifier.height(48.dp)
+                                modifier = Modifier.defaultMinSize(minHeight = 48.dp)
                             ) {
-                                Text("جلب البروكسيات الآن")
+                                Text(strings.fetchNowBtn, style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     }
@@ -244,7 +257,7 @@ fun ProxiesScreen(
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(specs.itemSpacing)
                 ) {
                     items(
                         items = state.filteredProxies,
@@ -277,6 +290,8 @@ private fun ProxyItemCard(
     onOpenQr: () -> Unit,
     onShare: () -> Unit
 ) {
+    val strings = LocalStrings.current
+    val specs = LocalAdaptiveSpecs.current
     val border = if (isActive) {
         BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
     } else {
@@ -295,12 +310,12 @@ private fun ProxyItemCard(
             .testTag("proxy_item_card_${proxy.port}")
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(specs.cardPadding),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -311,14 +326,14 @@ private fun ProxyItemCard(
                         if (isActive) {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "البروكسي النشط",
+                                contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                         Text(
                             text = proxy.server,
-                            style = MaterialTheme.typography.titleMedium.copy(
+                            style = MaterialTheme.typography.titleSmall.copy(
                                 fontFamily = JetBrainsMonoFamily
                             ),
                             fontWeight = FontWeight.Bold,
@@ -327,7 +342,7 @@ private fun ProxyItemCard(
                         )
                     }
                     Text(
-                        text = "المنفذ: ${proxy.port}  •  ${proxy.secretType}",
+                        text = strings.portLabel(proxy.port, proxy.secretType),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -336,54 +351,77 @@ private fun ProxyItemCard(
                 LatencyBadge(proxy = proxy)
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = onConnect,
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.height(48.dp)
+            if (specs.useStackedHeaders) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Send,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("اتصال بتلغرام", style = MaterialTheme.typography.labelLarge)
+                    Button(
+                        onClick = onConnect,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = strings.connectTelegramShort,
+                            style = MaterialTheme.typography.labelLarge,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        ProxyQuickActionIcons(
+                            proxy = proxy,
+                            onOpenQr = onOpenQr,
+                            onShare = onShare,
+                            onToggleFavorite = onToggleFavorite
+                        )
+                    }
                 }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = onConnect,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .defaultMinSize(minHeight = 48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = strings.connectTelegramShort,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                    }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    IconButton(
-                        onClick = onOpenQr,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.QrCode2,
-                            contentDescription = "عرض باركود QR",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    IconButton(
-                        onClick = onShare,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "مشاركة البروكسي"
-                        )
-                    }
-                    IconButton(
-                        onClick = onToggleFavorite,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (proxy.isFavorite) Icons.Default.Star else Icons.Outlined.StarBorder,
-                            contentDescription = "إضافة للمفضلة",
-                            tint = if (proxy.isFavorite) AmberModerate else MaterialTheme.colorScheme.onSurfaceVariant
+                    Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                        ProxyQuickActionIcons(
+                            proxy = proxy,
+                            onOpenQr = onOpenQr,
+                            onShare = onShare,
+                            onToggleFavorite = onToggleFavorite
                         )
                     }
                 }
@@ -393,17 +431,60 @@ private fun ProxyItemCard(
 }
 
 @Composable
+private fun ProxyQuickActionIcons(
+    proxy: ProxyEntity,
+    onOpenQr: () -> Unit,
+    onShare: () -> Unit,
+    onToggleFavorite: () -> Unit
+) {
+    val strings = LocalStrings.current
+    IconButton(
+        onClick = onOpenQr,
+        modifier = Modifier.size(48.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.QrCode2,
+            contentDescription = strings.actionQr,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+    IconButton(
+        onClick = onShare,
+        modifier = Modifier.size(48.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.Share,
+            contentDescription = strings.actionShare,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+    IconButton(
+        onClick = onToggleFavorite,
+        modifier = Modifier.size(48.dp)
+    ) {
+        Icon(
+            imageVector = if (proxy.isFavorite) Icons.Default.Star else Icons.Outlined.StarBorder,
+            contentDescription = strings.filterFavorites,
+            tint = if (proxy.isFavorite) AmberModerate else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
 private fun LatencyBadge(proxy: ProxyEntity) {
+    val strings = LocalStrings.current
     val (bgColor, textColor, label) = when {
         proxy.latencyMs == ProxyEntity.LATENCY_UNTESTED -> Triple(
             MaterialTheme.colorScheme.surfaceVariant,
             MaterialTheme.colorScheme.onSurfaceVariant,
-            "غير مفحوص"
+            strings.statusUntested
         )
         !proxy.isReachable || proxy.latencyMs >= ProxyEntity.LATENCY_FAILED -> Triple(
             CoralError.copy(alpha = 0.14f),
             CoralError,
-            "لا يستجيب"
+            strings.statusUnreachable
         )
         proxy.latencyMs <= 180 -> Triple(
             EmeraldVerified.copy(alpha = 0.16f),
@@ -423,12 +504,13 @@ private fun LatencyBadge(proxy: ProxyEntity) {
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium.copy(
-                fontFamily = if (proxy.isReachable) JetBrainsMonoFamily else MaterialTheme.typography.labelMedium.fontFamily
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontFamily = if (proxy.isReachable) JetBrainsMonoFamily else MaterialTheme.typography.labelSmall.fontFamily
             ),
             color = textColor,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
         )
     }
 }

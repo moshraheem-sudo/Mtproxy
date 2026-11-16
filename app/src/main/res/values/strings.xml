@@ -4,9 +4,9 @@
     <string name="developer_name">محمد شهيد الاعاجيبي</string>
     <string name="developer_label">تطوير وبرمجة: محمد شهيد الاعاجيبي</string>
 
-    <string name="nav_home">الاتصال السريع</string>
-    <string name="nav_proxies">البروكسيات</string>
-    <string name="nav_stability">الاستقرار</string>
+    <string name="nav_home">الاتصال</string>
+    <string name="nav_proxies">قائمة الاتصال</string>
+    <string name="nav_settings">الإعدادات</string>
 
     <string name="connect_telegram">تشغيل تلغرام بالبروكسي</string>
     <string name="verify_connection">فحص وتأكيد الاتصال</string>

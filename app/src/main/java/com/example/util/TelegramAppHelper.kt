@@ -10,29 +10,32 @@ import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import com.example.data.model.ProxyEntity
+import com.example.security.SecurityGuard
+import com.example.ui.i18n.AppStrings
 
 data class TelegramClientInfo(
     val packageName: String,
-    val displayName: String
+    val displayName: String,
+    val isOfficial: Boolean = false
 )
 
 object TelegramAppHelper {
 
     private val knownClients = listOf(
-        "org.telegram.messenger" to "Telegram الرسمي",
-        "org.telegram.messenger.web" to "Telegram Direct",
-        "org.thunderdog.challegram" to "Telegram X",
-        "org.telegram.plus" to "Plus Messenger",
-        "tw.nekomimi.nekogram" to "Nekogram",
-        "xyz.nextalone.nagram" to "Nagram",
-        "org.aka.messenger" to "AKA Messenger"
+        Triple("org.telegram.messenger", "Telegram", true),
+        Triple("org.telegram.messenger.web", "Telegram Direct", true),
+        Triple("org.thunderdog.challegram", "Telegram X", false),
+        Triple("org.telegram.plus", "Plus Messenger", false),
+        Triple("tw.nekomimi.nekogram", "Nekogram", false),
+        Triple("xyz.nextalone.nagram", "Nagram", false),
+        Triple("org.aka.messenger", "AKA Messenger", false)
     )
 
     fun detectInstalledTelegramClients(context: Context): List<TelegramClientInfo> {
         val pm = context.packageManager
-        return knownClients.mapNotNull { (pkg, name) ->
+        return knownClients.mapNotNull { (pkg, name, official) ->
             if (isPackageInstalled(pm, pkg)) {
-                TelegramClientInfo(packageName = pkg, displayName = name)
+                TelegramClientInfo(packageName = pkg, displayName = name, isOfficial = official)
             } else {
                 null
             }
@@ -61,6 +64,9 @@ object TelegramAppHelper {
     }
 
     fun openProxyInTelegram(context: Context, proxy: ProxyEntity): Boolean {
+        if (!SecurityGuard.sanitizeProxyFields(proxy.server, proxy.port, proxy.secret)) {
+            return false
+        }
         val installed = detectInstalledTelegramClients(context)
         val tgIntent = Intent(Intent.ACTION_VIEW, Uri.parse(proxy.tgLink)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -90,29 +96,29 @@ object TelegramAppHelper {
         clipboard?.setPrimaryClip(ClipData.newPlainText("Telegram Proxy", proxy.tmeLink))
     }
 
-    fun shareProxyText(context: Context, proxy: ProxyEntity) {
+    fun shareProxyText(context: Context, proxy: ProxyEntity, strings: AppStrings) {
         val latencyInfo = if (proxy.isReachable && proxy.latencyMs in 1 until ProxyEntity.LATENCY_FAILED) {
-            "السرعة المفحوصة: ${proxy.latencyMs} ms"
+            strings.shareLatencyLine(proxy.latencyMs)
         } else {
-            "بروكسي MTProto مباشر"
+            strings.shareDirectLine
         }
         val text = buildString {
-            appendLine("اتصال تلغرام سريع ومستقر عبر بروكسي MTProto:")
-            appendLine("السيرفر: ${proxy.server}:${proxy.port}")
+            appendLine(strings.shareHeaderLine)
+            appendLine("${proxy.server}:${proxy.port}")
             appendLine(latencyInfo)
             appendLine()
-            appendLine("اضغط للربط المباشر في تلغرام:")
+            appendLine(strings.shareTapLine)
             appendLine(proxy.tmeLink)
             appendLine()
-            append("تطبيق تلي بروكسي • تطوير: محمد شهيد الاعاجيبي")
+            append("${strings.appName} • ${strings.developerName}")
         }
 
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "بروكسي تلغرام سريع")
+            putExtra(Intent.EXTRA_SUBJECT, strings.appName)
             putExtra(Intent.EXTRA_TEXT, text)
         }
-        val chooser = Intent.createChooser(shareIntent, "مشاركة البروكسي مع الأصدقاء").apply {
+        val chooser = Intent.createChooser(shareIntent, strings.actionShare).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(chooser)

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
@@ -48,7 +49,7 @@ object WorkScheduler {
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
             UNIQUE_IMMEDIATE_WORK_NAME,
-            androidx.work.ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.REPLACE,
             request
         )
     }

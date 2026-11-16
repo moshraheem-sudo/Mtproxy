@@ -16,7 +16,10 @@ import androidx.core.content.ContextCompat
 import com.example.MainActivity
 import com.example.R
 import com.example.TeleProxyApp
+import com.example.data.local.AppLanguage
 import com.example.data.model.ProxyEntity
+import com.example.ui.i18n.AppStrings
+import com.example.ui.i18n.stringsFor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -38,6 +41,13 @@ class ProxyStabilityService : Service() {
         ensureChannel(this)
     }
 
+    private suspend fun currentStrings(): AppStrings {
+        val app = applicationContext as? TeleProxyApp
+        val lang = runCatching { app?.repository?.getSettingsSnapshot()?.appLanguage }.getOrNull()
+            ?: AppLanguage.ARABIC
+        return stringsFor(lang)
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
@@ -50,22 +60,24 @@ class ProxyStabilityService : Service() {
             }
             ACTION_SYNC_NOW -> {
                 serviceScope.launch {
-                    updateNotification("جارٍ فحص وتحديث البروكسيات...", null)
+                    val strings = currentStrings()
+                    updateNotification(strings.statusSyncing, null, strings)
                     val app = applicationContext as? TeleProxyApp ?: return@launch
-                    val summary = app.repository.syncAndVerify(maxTestCount = 50)
+                    val summary = app.repository.syncAndVerify(maxTestCount = 350)
                     val proxy = summary.activeProxy
                     val text = if (proxy != null && proxy.isReachable) {
                         "${proxy.server}:${proxy.port} • ${proxy.latencyMs} ms"
                     } else {
-                        summary.errorMessage ?: "تم الفحص (${summary.workingCount} شغال)"
+                        summary.errorMessage ?: strings.syncWorkingSummary(summary.workingCount)
                     }
-                    updateNotification(text, proxy)
+                    updateNotification(text, proxy, strings)
                 }
                 return START_STICKY
             }
         }
 
-        val initialNotification = buildNotification("جارٍ مراقبة استقرار البروكسي...", null)
+        val initialStrings = stringsFor(AppLanguage.ARABIC)
+        val initialNotification = buildNotification(initialStrings.stabilityServiceTitle, null, initialStrings)
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(
@@ -91,34 +103,32 @@ class ProxyStabilityService : Service() {
             val app = applicationContext as? TeleProxyApp ?: return@launch
             while (isActive) {
                 try {
-                    val (activeProxy, switched) = app.repository.verifyActiveOrAutoSwitch()
-                    val statusText = when {
-                        activeProxy != null && activeProxy.isReachable && switched ->
-                            "تم التبديل لبروكسي أسرع: ${activeProxy.server} (${activeProxy.latencyMs} ms)"
-                        activeProxy != null && activeProxy.isReachable ->
-                            "متصل ومستقر: ${activeProxy.server} • ${activeProxy.latencyMs} ms"
-                        else ->
-                            "جارٍ البحث عن بروكسي بديل مستقر..."
+                    val strings = currentStrings()
+                    val (activeProxy, _) = app.repository.verifyActiveOrAutoSwitch()
+                    val statusText = if (activeProxy != null && activeProxy.isReachable) {
+                        "${activeProxy.server}:${activeProxy.port} • ${activeProxy.latencyMs} ms"
+                    } else {
+                        strings.statusSyncing
                     }
-                    updateNotification(statusText, activeProxy)
+                    updateNotification(statusText, activeProxy, strings)
 
                     if (activeProxy == null || !activeProxy.isReachable) {
-                        app.repository.syncAndVerify(maxTestCount = 50)
+                        app.repository.syncAndVerify(maxTestCount = 350)
                     }
                 } catch (_: Throwable) {
                 }
 
-                delay(3 * 60 * 1000L) // Check every 3 minutes
+                delay(3 * 60 * 1000L)
             }
         }
     }
 
-    private fun updateNotification(contentText: String, activeProxy: ProxyEntity?) {
+    private fun updateNotification(contentText: String, activeProxy: ProxyEntity?, strings: AppStrings) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildNotification(contentText, activeProxy))
+        manager.notify(NOTIFICATION_ID, buildNotification(contentText, activeProxy, strings))
     }
 
-    private fun buildNotification(contentText: String, activeProxy: ProxyEntity?): Notification {
+    private fun buildNotification(contentText: String, activeProxy: ProxyEntity?, strings: AppStrings): Notification {
         val openAppIntent = PendingIntent.getActivity(
             this,
             0,
@@ -142,13 +152,13 @@ class ProxyStabilityService : Service() {
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(getString(R.string.notif_monitor_title))
+            .setContentTitle(strings.appName)
             .setContentText(contentText)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openAppIntent)
-            .addAction(0, "تحديث", syncIntent)
-            .addAction(0, "إيقاف", stopIntent)
+            .addAction(0, strings.refreshBtn, syncIntent)
+            .addAction(0, strings.cancelBtn, stopIntent)
 
         if (activeProxy != null) {
             val tgPendingIntent = PendingIntent.getActivity(
@@ -159,7 +169,7 @@ class ProxyStabilityService : Service() {
                 },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            builder.addAction(0, "فتح تلغرام", tgPendingIntent)
+            builder.addAction(0, strings.connectTelegramShort, tgPendingIntent)
         }
 
         return builder.build()

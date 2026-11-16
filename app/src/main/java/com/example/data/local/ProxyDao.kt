@@ -64,6 +64,9 @@ interface ProxyDao {
     @Query("DELETE FROM proxies WHERE isFavorite = 0")
     suspend fun deleteAllNonFavorites()
 
+    @Query("DELETE FROM proxies WHERE isReachable = 0 AND lastCheckedAt > 0")
+    suspend fun deleteUnreachableProxies(): Int
+
     @Transaction
     suspend fun mergeSyncedProxies(freshProxies: List<ProxyEntity>) {
         if (freshProxies.isEmpty()) return
