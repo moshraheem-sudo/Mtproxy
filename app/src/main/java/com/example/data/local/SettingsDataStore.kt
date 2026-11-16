@@ -23,7 +23,12 @@ data class ProxySettings(
     val stabilityServiceEnabled: Boolean = false,
     val lastSyncTimestamp: Long = 0L,
     val lastSyncStatus: String = "جاهز للمزامنة الأولى",
-    val lastSyncCount: Int = 0
+    val lastSyncCount: Int = 0,
+    val totalUsersCount: Int = 0,
+    val latestAvailableVersion: String? = null,
+    val latestUpdateUrl: String? = null,
+    val latestReleaseNotes: String? = null,
+    val lastUpdateCheckAt: Long = 0L
 )
 
 class SettingsDataStore(private val context: Context) {
@@ -37,6 +42,11 @@ class SettingsDataStore(private val context: Context) {
         val LAST_SYNC_TIMESTAMP = longPreferencesKey("last_sync_timestamp")
         val LAST_SYNC_STATUS = stringPreferencesKey("last_sync_status")
         val LAST_SYNC_COUNT = intPreferencesKey("last_sync_count")
+        val TOTAL_USERS_COUNT = intPreferencesKey("total_users_count")
+        val LATEST_AVAILABLE_VERSION = stringPreferencesKey("latest_available_version")
+        val LATEST_UPDATE_URL = stringPreferencesKey("latest_update_url")
+        val LATEST_RELEASE_NOTES = stringPreferencesKey("latest_release_notes")
+        val LAST_UPDATE_CHECK_AT = longPreferencesKey("last_update_check_at")
     }
 
     val settingsFlow: Flow<ProxySettings> = context.dataStore.data.map { prefs ->
@@ -48,7 +58,12 @@ class SettingsDataStore(private val context: Context) {
             stabilityServiceEnabled = prefs[Keys.STABILITY_SERVICE_ENABLED] ?: false,
             lastSyncTimestamp = prefs[Keys.LAST_SYNC_TIMESTAMP] ?: 0L,
             lastSyncStatus = prefs[Keys.LAST_SYNC_STATUS] ?: "جاهز للمزامنة الأولى",
-            lastSyncCount = prefs[Keys.LAST_SYNC_COUNT] ?: 0
+            lastSyncCount = prefs[Keys.LAST_SYNC_COUNT] ?: 0,
+            totalUsersCount = prefs[Keys.TOTAL_USERS_COUNT] ?: 0,
+            latestAvailableVersion = prefs[Keys.LATEST_AVAILABLE_VERSION],
+            latestUpdateUrl = prefs[Keys.LATEST_UPDATE_URL],
+            latestReleaseNotes = prefs[Keys.LATEST_RELEASE_NOTES],
+            lastUpdateCheckAt = prefs[Keys.LAST_UPDATE_CHECK_AT] ?: 0L
         )
     }
 
@@ -82,6 +97,30 @@ class SettingsDataStore(private val context: Context) {
             prefs[Keys.LAST_SYNC_TIMESTAMP] = timestamp
             prefs[Keys.LAST_SYNC_STATUS] = status
             prefs[Keys.LAST_SYNC_COUNT] = count
+        }
+    }
+
+    suspend fun updateAppRemoteInfo(
+        totalUsersCount: Int,
+        latestVersion: String?,
+        updateUrl: String?,
+        releaseNotes: String?,
+        checkedAt: Long
+    ) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.TOTAL_USERS_COUNT] = totalUsersCount
+            prefs[Keys.LAST_UPDATE_CHECK_AT] = checkedAt
+            if (latestVersion.isNullOrBlank()) {
+                prefs.remove(Keys.LATEST_AVAILABLE_VERSION)
+                prefs.remove(Keys.LATEST_UPDATE_URL)
+                prefs.remove(Keys.LATEST_RELEASE_NOTES)
+            } else {
+                prefs[Keys.LATEST_AVAILABLE_VERSION] = latestVersion
+                if (updateUrl != null) prefs[Keys.LATEST_UPDATE_URL] = updateUrl
+                else prefs.remove(Keys.LATEST_UPDATE_URL)
+                if (releaseNotes != null) prefs[Keys.LATEST_RELEASE_NOTES] = releaseNotes
+                else prefs.remove(Keys.LATEST_RELEASE_NOTES)
+            }
         }
     }
 }

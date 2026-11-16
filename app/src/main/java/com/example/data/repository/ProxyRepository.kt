@@ -1,9 +1,12 @@
 package com.example.data.repository
 
+import com.example.BuildConfig
 import com.example.data.local.ProxyDao
 import com.example.data.local.ProxySettings
 import com.example.data.local.SettingsDataStore
 import com.example.data.model.ProxyEntity
+import com.example.data.network.AppRemoteStatus
+import com.example.data.network.AppUpdateAndStatsFetcher
 import com.example.data.network.MtprotoFetcher
 import com.example.data.network.ProxyConnectivityTester
 import kotlinx.coroutines.flow.Flow
@@ -21,7 +24,8 @@ class ProxyRepository(
     private val proxyDao: ProxyDao,
     private val settingsStore: SettingsDataStore,
     private val fetcher: MtprotoFetcher = MtprotoFetcher(),
-    private val tester: ProxyConnectivityTester = ProxyConnectivityTester()
+    private val tester: ProxyConnectivityTester = ProxyConnectivityTester(),
+    private val appRemoteFetcher: AppUpdateAndStatsFetcher = AppUpdateAndStatsFetcher()
 ) {
     val proxiesFlow: Flow<List<ProxyEntity>> = proxyDao.observeAllProxies()
     val settingsFlow: Flow<ProxySettings> = settingsStore.settingsFlow
@@ -32,7 +36,7 @@ class ProxyRepository(
     ): SyncSummary {
         val fetchResult = fetcher.fetchFromSoliSpirit()
         if (fetchResult.isFailure) {
-            val message = fetchResult.exceptionOrNull()?.localizedMessage ?: "تعذر الاتصال بمصدر SoliSpirit"
+            val message = fetchResult.exceptionOrNull()?.localizedMessage ?: "تعذر الاتصال بمصدر التحديث"
             val now = System.currentTimeMillis()
             val cached = proxyDao.getAllProxiesOnce()
             settingsStore.updateSyncMetadata(now, "فشل التحديث: $message", cached.size)
@@ -77,6 +81,9 @@ class ProxyRepository(
         }
         settingsStore.updateSyncMetadata(now, statusMsg, freshProxies.size)
 
+        // Refresh app update & total user count quietly in background
+        refreshAppUpdateAndUserStats()
+
         return SyncSummary(
             fetchedCount = freshProxies.size,
             testedCount = results.size,
@@ -84,6 +91,23 @@ class ProxyRepository(
             activeProxy = activeProxy,
             switchedAutomatically = switched
         )
+    }
+
+    suspend fun refreshAppUpdateAndUserStats(): AppRemoteStatus {
+        val status = appRemoteFetcher.fetchUpdateAndUserStats(BuildConfig.VERSION_NAME)
+        if (status.checkSucceeded) {
+            val prev = settingsStore.getSnapshot()
+            val resolvedUsers = if (status.totalUsersCount > 0) status.totalUsersCount else prev.totalUsersCount
+            settingsStore.updateAppRemoteInfo(
+                totalUsersCount = resolvedUsers,
+                latestVersion = if (status.isUpdateAvailable) status.latestVersion else null,
+                updateUrl = if (status.isUpdateAvailable) status.downloadUrl else null,
+                releaseNotes = if (status.isUpdateAvailable) status.releaseNotes else null,
+                checkedAt = System.currentTimeMillis()
+            )
+            return status.copy(totalUsersCount = resolvedUsers)
+        }
+        return status
     }
 
     suspend fun pingAllExisting(

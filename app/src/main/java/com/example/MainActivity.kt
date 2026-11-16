@@ -249,8 +249,12 @@ fun TeleProxyRootApp(viewModel: MainViewModel = viewModel()) {
                     }
 
                     composable(ROUTE_STABILITY) {
+                        LaunchedEffect(Unit) {
+                            viewModel.checkAppUpdatesAndStats(manual = false)
+                        }
                         StabilityScreen(
                             state = state,
+                            onCheckAppUpdate = { viewModel.checkAppUpdatesAndStats(manual = true) },
                             onToggleAutoSync = viewModel::setAutoSyncEnabled,
                             onSelectInterval = viewModel::setSyncIntervalMinutes,
                             onToggleAutoFailover = viewModel::setAutoFailoverEnabled,

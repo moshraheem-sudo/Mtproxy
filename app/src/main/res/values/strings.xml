@@ -3,7 +3,6 @@
     <string name="app_subtitle">مدير بروكسي تلغرام الذكي</string>
     <string name="developer_name">محمد شهيد الاعاجيبي</string>
     <string name="developer_label">تطوير وبرمجة: محمد شهيد الاعاجيبي</string>
-    <string name="source_repo_url">github.com/SoliSpirit/mtproto</string>
 
     <string name="nav_home">الاتصال السريع</string>
     <string name="nav_proxies">البروكسيات</string>
@@ -16,7 +15,7 @@
     <string name="copy_link">نسخ الرابط</string>
     <string name="show_qr">باركود QR</string>
     <string name="download_qr">تنزيل صورة الباركود</string>
-    <string name="share_qr">مشاركة صورة الباركسي</string>
+    <string name="share_qr">مشاركة صورة الباركود</string>
 
     <string name="notif_channel_sync_name">تحديثات البروكسي واستقرار الخدمة</string>
     <string name="notif_channel_sync_desc">إشعارات حالة الاتصال والتحديث التلقائي بالخلفية</string>

@@ -66,14 +66,19 @@ class ProxyStabilityService : Service() {
         }
 
         val initialNotification = buildNotification("جارٍ مراقبة استقرار البروكسي...", null)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                initialNotification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, initialNotification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    initialNotification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, initialNotification)
+            }
+        } catch (_: Throwable) {
+            stopSelf()
+            return START_NOT_STICKY
         }
 
         startMonitoringLoop()
@@ -85,19 +90,22 @@ class ProxyStabilityService : Service() {
         monitorJob = serviceScope.launch {
             val app = applicationContext as? TeleProxyApp ?: return@launch
             while (isActive) {
-                val (activeProxy, switched) = app.repository.verifyActiveOrAutoSwitch()
-                val statusText = when {
-                    activeProxy != null && activeProxy.isReachable && switched ->
-                        "تم التبديل لبروكسي أسرع: ${activeProxy.server} (${activeProxy.latencyMs} ms)"
-                    activeProxy != null && activeProxy.isReachable ->
-                        "متصل ومستقر: ${activeProxy.server} • ${activeProxy.latencyMs} ms"
-                    else ->
-                        "جارٍ البحث عن بروكسي بديل من SoliSpirit..."
-                }
-                updateNotification(statusText, activeProxy)
+                try {
+                    val (activeProxy, switched) = app.repository.verifyActiveOrAutoSwitch()
+                    val statusText = when {
+                        activeProxy != null && activeProxy.isReachable && switched ->
+                            "تم التبديل لبروكسي أسرع: ${activeProxy.server} (${activeProxy.latencyMs} ms)"
+                        activeProxy != null && activeProxy.isReachable ->
+                            "متصل ومستقر: ${activeProxy.server} • ${activeProxy.latencyMs} ms"
+                        else ->
+                            "جارٍ البحث عن بروكسي بديل مستقر..."
+                    }
+                    updateNotification(statusText, activeProxy)
 
-                if (activeProxy == null || !activeProxy.isReachable) {
-                    app.repository.syncAndVerify(maxTestCount = 50)
+                    if (activeProxy == null || !activeProxy.isReachable) {
+                        app.repository.syncAndVerify(maxTestCount = 50)
+                    }
+                } catch (_: Throwable) {
                 }
 
                 delay(3 * 60 * 1000L) // Check every 3 minutes
@@ -187,14 +195,20 @@ class ProxyStabilityService : Service() {
         }
 
         fun start(context: Context) {
-            ensureChannel(context)
-            val intent = Intent(context, ProxyStabilityService::class.java)
-            ContextCompat.startForegroundService(context, intent)
+            try {
+                ensureChannel(context)
+                val intent = Intent(context, ProxyStabilityService::class.java)
+                ContextCompat.startForegroundService(context, intent)
+            } catch (_: Throwable) {
+            }
         }
 
         fun stop(context: Context) {
-            val intent = Intent(context, ProxyStabilityService::class.java).setAction(ACTION_STOP)
-            context.startService(intent)
+            try {
+                val intent = Intent(context, ProxyStabilityService::class.java).setAction(ACTION_STOP)
+                context.startService(intent)
+            } catch (_: Throwable) {
+            }
         }
     }
 }

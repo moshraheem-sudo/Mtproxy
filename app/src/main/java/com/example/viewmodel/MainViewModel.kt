@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.BuildConfig
 import com.example.TeleProxyApp
 import com.example.data.local.ProxySettings
 import com.example.data.model.ProxyEntity
@@ -20,7 +21,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -47,12 +47,12 @@ data class MainUiState(
     val activeFilter: ProxyFilter = ProxyFilter.ALL,
     val isSyncing: Boolean = false,
     val isPingingAll: Boolean = false,
+    val isCheckingAppUpdate: Boolean = false,
     val pingProgressText: String = "",
     val verificationReport: VerificationReport = VerificationReport(),
     val qrTargetProxy: ProxyEntity? = null,
     val qrPreviewBitmap: Bitmap? = null,
-    val pendingSafBitmap: Bitmap? = null,
-    val pendingSafFileName: String? = null
+    val currentAppVersion: String = BuildConfig.VERSION_NAME
 )
 
 sealed interface UiEvent {
@@ -70,6 +70,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _activeFilter = MutableStateFlow(ProxyFilter.ALL)
     private val _isSyncing = MutableStateFlow(false)
     private val _isPingingAll = MutableStateFlow(false)
+    private val _isCheckingAppUpdate = MutableStateFlow(false)
     private val _pingProgressText = MutableStateFlow("")
     private val _verificationReport = MutableStateFlow(VerificationReport())
     private val _qrTargetProxy = MutableStateFlow<ProxyEntity?>(null)
@@ -87,6 +88,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _activeFilter,
         _isSyncing,
         _isPingingAll,
+        _isCheckingAppUpdate,
         _pingProgressText,
         _verificationReport,
         _qrTargetProxy,
@@ -99,10 +101,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val filter = values[3] as ProxyFilter
         val isSyncing = values[4] as Boolean
         val isPinging = values[5] as Boolean
-        val progressText = values[6] as String
-        val verification = values[7] as VerificationReport
-        val qrProxy = values[8] as ProxyEntity?
-        val qrBitmap = values[9] as Bitmap?
+        val isCheckingUpdate = values[6] as Boolean
+        val progressText = values[7] as String
+        val verification = values[8] as VerificationReport
+        val qrProxy = values[9] as ProxyEntity?
+        val qrBitmap = values[10] as Bitmap?
 
         val activeProxy = proxies.firstOrNull { it.id == settings.activeProxyId }
             ?: proxies.firstOrNull { it.isReachable }
@@ -130,10 +133,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             activeFilter = filter,
             isSyncing = isSyncing,
             isPingingAll = isPinging,
+            isCheckingAppUpdate = isCheckingUpdate,
             pingProgressText = progressText,
             verificationReport = verification,
             qrTargetProxy = qrProxy,
-            qrPreviewBitmap = qrBitmap
+            qrPreviewBitmap = qrBitmap,
+            currentAppVersion = BuildConfig.VERSION_NAME
         )
     }.stateIn(
         scope = viewModelScope,
@@ -143,7 +148,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         refreshInstalledClients()
-        autoSyncIfEmpty()
+        autoSyncOnStartup()
     }
 
     private fun refreshInstalledClients() {
@@ -151,11 +156,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _verificationReport.value = _verificationReport.value.copy(installedClients = clients)
     }
 
-    private fun autoSyncIfEmpty() {
+    private fun autoSyncOnStartup() {
         viewModelScope.launch {
+            checkAppUpdatesAndStats(manual = false)
+            val settings = repository.getSettingsSnapshot()
             val current = uiState.value.proxies
-            if (current.isEmpty()) {
+            if (current.isEmpty() || System.currentTimeMillis() - settings.lastSyncTimestamp > 30 * 60 * 1000L) {
                 syncNow()
+            }
+        }
+    }
+
+    fun checkAppUpdatesAndStats(manual: Boolean = true) {
+        if (_isCheckingAppUpdate.value) return
+        viewModelScope.launch {
+            _isCheckingAppUpdate.value = true
+            val status = repository.refreshAppUpdateAndUserStats()
+            _isCheckingAppUpdate.value = false
+
+            if (manual) {
+                if (!status.checkSucceeded) {
+                    _events.emit(
+                        UiEvent.ShowMessage(status.errorMessage ?: "تعذر الاتصال بخادم التحديثات")
+                    )
+                } else if (status.isUpdateAvailable && status.latestVersion != null) {
+                    _events.emit(
+                        UiEvent.ShowMessage("يتوفر تحديث جديد للتطبيق: الإصدار ${status.latestVersion}")
+                    )
+                } else {
+                    _events.emit(
+                        UiEvent.ShowMessage("التطبيق محدث على آخر إصدار (${BuildConfig.VERSION_NAME})")
+                    )
+                }
             }
         }
     }
@@ -172,7 +204,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (_isSyncing.value) return
         viewModelScope.launch {
             _isSyncing.value = true
-            _pingProgressText.value = "جارٍ جلب البروكسيات من SoliSpirit..."
+            _pingProgressText.value = "جارٍ جلب البروكسيات من الخادم السحابي..."
             val summary = repository.syncAndVerify(maxTestCount = 75) { checked, total ->
                 _pingProgressText.value = "فحص السرعة ($checked / $total)"
             }

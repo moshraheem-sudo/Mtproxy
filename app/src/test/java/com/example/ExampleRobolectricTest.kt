@@ -2,6 +2,7 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.example.data.network.AppUpdateAndStatsFetcher
 import com.example.data.network.MtprotoFetcher
 import com.example.util.QrCodeGenerator
 import org.junit.Assert.assertEquals
@@ -16,10 +17,20 @@ import org.robolectric.annotation.Config
 class ExampleRobolectricTest {
 
     @Test
-    fun `app name and developer attribution strings are set`() {
+    fun `app name version and developer attribution are configured`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         assertEquals("تلي بروكسي", context.getString(R.string.app_name))
         assertEquals("محمد شهيد الاعاجيبي", context.getString(R.string.developer_name))
+        assertEquals("1.0.0", BuildConfig.VERSION_NAME)
+    }
+
+    @Test
+    fun `semver comparison only accepts versions higher than installed`() {
+        assertTrue(AppUpdateAndStatsFetcher.compareSemVer("v1.0.1", "1.0.0") > 0)
+        assertTrue(AppUpdateAndStatsFetcher.compareSemVer("1.1.0", "1.0.0") > 0)
+        assertTrue(AppUpdateAndStatsFetcher.compareSemVer("2.0", "1.0.0") > 0)
+        assertEquals(0, AppUpdateAndStatsFetcher.compareSemVer("v1.0.0", "1.0.0"))
+        assertTrue(AppUpdateAndStatsFetcher.compareSemVer("0.9.9", "1.0.0") < 0)
     }
 
     @Test

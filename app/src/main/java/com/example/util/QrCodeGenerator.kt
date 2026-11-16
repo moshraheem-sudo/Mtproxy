@@ -133,7 +133,7 @@ object QrCodeGenerator {
             textSize = 26f
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText("github.com/SoliSpirit/mtproto", width / 2f, 1285f, repoPaint)
+        canvas.drawText("تلي بروكسي • اتصال سريع ومستقر", width / 2f, 1285f, repoPaint)
 
         return bitmap
     }

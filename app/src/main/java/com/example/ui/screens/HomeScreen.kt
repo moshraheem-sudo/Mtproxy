@@ -278,7 +278,7 @@ fun HomeScreen(
                         }
                     } else {
                         Text(
-                            text = "اضغط تحديث لجلب أحدث البروكسيات المجانية من SoliSpirit/mtproto",
+                            text = "اضغط تحديث لجلب أحدث البروكسيات المجانية السريعة",
                             style = MaterialTheme.typography.bodyLarge,
                             color = Color.White
                         )
@@ -508,7 +508,7 @@ fun HomeScreen(
                         "لم يتم بعد"
                     }
                     Text(
-                        text = "آخر تحديث: $formattedTime  •  المصدر: SoliSpirit/mtproto",
+                        text = "آخر تحديث: $formattedTime  •  المصدر السحابي: تحديث تلقائي",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
